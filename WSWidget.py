@@ -2,10 +2,14 @@ import sys
 import io
 import PySide6.QtWidgets as qt
 import PySide6.QtGui as gui
+from Util import PlotWidget
+
+import numpy as np
 
 class WSWidget(qt.QWidget):
     def __init__(self, parent=None, name="workspace"):
         super().__init__(parent=parent)
+        
         #layouts
         self.main_layout = qt.QVBoxLayout()
         self.info_area = qt.QVBoxLayout()
@@ -22,7 +26,6 @@ class WSWidget(qt.QWidget):
 
         #Configurações do widget
         self.setWindowTitle(name)
-        #self.setFixedSize(600, 800)
         self.setLayout(self.main_layout)
         self.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
 
@@ -38,9 +41,6 @@ class WSWidget(qt.QWidget):
         self.log_output = qt.QTextEdit()
         self.log_output.setReadOnly(True)
         self.log_output.setPlaceholderText("Logs aparecerão aqui...")
-
-        sys.stdout = LogStream(self.log_output)
-        sys.stderr = LogStream(self.log_output)
         
         self.dev_area.addWidget(self.log_output)
 
@@ -67,11 +67,7 @@ class WSWidget(qt.QWidget):
         layout = qt.QVBoxLayout()
 
         # Imagem
-        image_label = qt.QLabel()
-        pixmap = gui.QPixmap(400, 400)
-        pixmap.fill("gray")
-        image_label.setPixmap(pixmap)
-        image_label.setFixedSize(400, 300)
+        plot = PlotWidget(self)
 
         # Layout horizontal com botões
         button_layout = qt.QHBoxLayout()
@@ -84,7 +80,7 @@ class WSWidget(qt.QWidget):
         button_layout.addWidget(clear)
 
         # Adicionar componentes ao layout vertical
-        layout.addWidget(image_label, stretch=1)
+        layout.addWidget(plot, stretch=1)
         layout.addLayout(button_layout)
 
         return layout
@@ -119,6 +115,14 @@ class WSWidget(qt.QWidget):
         btn = qt.QPushButton(name, parent=self)
         btn.setObjectName(name.lower().replace(' ', '_'))
         return btn
+
+    def plot(self, x, y, y_min=None, y_max=None):
+        plt = self.findChild(PlotWidget)
+        plt.plot(x,y,y_min,y_max)
+
+    def set_logstream(self):
+        sys.stdout = LogStream(self.log_output)
+        sys.stderr = LogStream(self.log_output)
         
 class LogStream(io.StringIO):
     """Classe para redirecionar sys.stdout e sys.stderr para um widget PyQt."""
