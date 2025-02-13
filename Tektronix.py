@@ -1,6 +1,8 @@
 from serial import Serial, EIGHTBITS, STOPBITS_ONE, PARITY_NONE, SerialException
 from serial.tools import list_ports
 import time
+import datetime
+import csv
 
 class Tektronix():
     def __init__(self):
@@ -68,7 +70,6 @@ class Tektronix():
             print(f'Erro {status}')
             return
         try:
-            #command+='\r\n'
             self.ser.write(command.encode() + b'\n')
             time.sleep(0.1)
             if(command.strip().endswith('?')):
@@ -264,12 +265,20 @@ class Waveform:
         """
         return self.parsed_data
     
+    def get_raw_curv_data(self):
+        """
+        Retorna os dados brutos de CURV? como um array de inteiros.
+        """
+        if not self.curv_data:
+            return None
+        return list(map(int, self.curv_data.split(',')))
+
     def process_curv_data(self):
         """
         Processa os valores de CURV? e retorna uma lista de tensões convertidas.
         """
         if not self.curv_data:
-            return None
+            return None 
         
         data_points = list(map(int, self.curv_data.split(',')))
         y_increment = self.parsed_data["YINCREMENT"]
@@ -304,7 +313,52 @@ class Waveform:
         bit_depth = self.parsed_data["BIT_DEPTH"]
         min_value = -(2 ** (bit_depth - 1))  # Assumindo valores com sinal
         return self.parsed_data["YZERO"] + (self.parsed_data["YINCREMENT"] * min_value)
+
+    def generate_csv(self, file_name=None):
+
+        header = ['time', 'curv']
+        curv = self.get_raw_curv_data()
+        time = self.get_time_array()
+        
+        if not curv and not time:
+            print('erro: curv ou time nao carregados')
+            return
+
+        data = [time, curv]
+        data_t = [[linha[i] for linha in data] for i in range(len(data[0]))]
+
+        if not file_name:
+            file_name = str(datetime.datetime.now())
+        
+        csv_file = open(file_name.strip().replace(' ', '_') + '.csv', 'w')
+        writer = csv.writer(csv_file)
+        writer.writerow(header)
+        writer.writerows(data_t)
+        csv_file.close()
+        pass
+
+    def generate_waveform_txt(self, name=None):
+        if not name:
+            name = str(datetime.datetime.now()).strip().replace(' ', '_').replace('.','_')
+
+        file = open(name + '.txt', 'w')
+        file.write(self.raw_data)
+        file.write(self.curv_data)
+        file.close()
+        pass
     
+    @staticmethod
+    def build_waveform_by_txt(file_name:str):
+        if not file_name.endswith('.txt'):
+            print('tipo de arquivo inválido')
+        
+        file = open(file_name, 'r')
+        header = file.readline()
+        curv = file.readline()
+
+        return Waveform(header, curv)
+        pass
+
     def __str__(self):
         """
         Retorna uma representação formatada dos dados processados.
@@ -343,10 +397,11 @@ def plot_xy(x, y, y_min=None, y_max=None):
 
 
 if __name__ == '__main__':
-    tek = Tektronix()
-    tek.start()
+    #tek = Tektronix()
+    #tek.start()
     
-    waveform = tek.ch1_waveform()
+    #waveform = tek.ch1_waveform()
+    waveform = Waveform.build_waveform_by_txt('2025-02-11_15:20:28_199721.csv')
     print(waveform)
     
     if waveform:
@@ -355,4 +410,8 @@ if __name__ == '__main__':
         y_max = waveform.get_voltage_max()
         y_min = waveform.get_voltage_min()
 
-        plot_xy(x, y, y_min, y_max)        
+        plot_xy(x, y, y_min, y_max)
+        #waveform.generate_csv()
+        #waveform.generate_waveform_txt()    
+    
+    pass
