@@ -1,3 +1,7 @@
-Main.py
-Tektronix.py
 __pycache__
+ignore
+waveform_data
+*.csv
+*.txt
+*.log
+*.bmp
