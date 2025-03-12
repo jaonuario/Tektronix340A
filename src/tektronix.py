@@ -4,7 +4,7 @@ import csv
 import logging
 from serial import Serial, EIGHTBITS, STOPBITS_ONE, PARITY_NONE, SerialException
 from serial.tools import list_ports
-from waveform import Waveform, WaveformPlot
+from .waveform import Waveform, WaveformPlot
 
 # Configuração do logging
 logging.basicConfig(
@@ -20,8 +20,8 @@ logger = logging.getLogger('Tektronix')
 class Tektronix():
     def __init__(self):
         self.baudrate = 19200
-        self.serial_port = None      
-        self.ser = None          
+        self.serial_port = None
+        self.ser = None
         self.device_info = None
         logger.info('Objeto Tektronix inicializado')
 
@@ -153,7 +153,7 @@ class Tektronix():
         res = self.send_commands(CH1_FREQ)
         if res:
             return res[0]
-        return None    
+        return None
 
     def ch2_freq(self):
         CH2_FREQ = [

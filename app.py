@@ -10,8 +10,8 @@ from PySide6.QtGui import QFont
 from pyqtgraph import PlotWidget
 
 # Source
-from src.waveform import Waveform
-from src.tektronix import Tektronix
+from src import Waveform
+from src import Tektronix
 
 # Configuração básica do logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
