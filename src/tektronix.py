@@ -1,6 +1,4 @@
 import time
-import datetime
-import csv
 import logging
 from serial import Serial, EIGHTBITS, STOPBITS_ONE, PARITY_NONE, SerialException
 from serial.tools import list_ports
@@ -18,12 +16,59 @@ logging.basicConfig(
 logger = logging.getLogger('Tektronix')
 
 class Tektronix():
-    def __init__(self):
-        self.baudrate = 19200
-        self.serial_port = None
-        self.ser = None
+    def __init__(self, baudrate=19200, bytesize=EIGHTBITS, stopbits=STOPBITS_ONE):
+        self.__ser = Serial(baudrate=baudrate, bytesize=bytesize, stopbits=stopbits, timeout=1)
+        self.__find_device()
+
         self.device_info = None
         logger.info('Objeto Tektronix inicializado')
+
+    def __find_device(self):
+        for port in list_ports.comports():
+            try:
+                self.__ser.port = port.device
+                self.__ser.open()
+                self.__ser.write(b"ID?\n")
+                response = self.__ser.readline().decode().strip()
+                if "TEKTRONIX" in response.upper():
+                    print(f"Osciloscópio encontrado em {port.device}: {response}")
+                    return
+                self.__ser.close()
+            except Exception as e:
+                print(f"Erro ao acessar {port.device}: {e}")
+        raise Exception("Nenhum ociloscópio Tektronix foi encontrado")
+    
+    def __re_open_port(self):
+        if self.__ser.isOpen():
+            self.__ser.close()
+        self.__ser.open()
+
+    @property
+    def baudrate(self):
+        return self.__ser.baudrate
+    
+    @baudrate.setter
+    def baudrate(self, new_baudrate):
+        self.__ser.baudrate = new_baudrate
+        self.__re_open_port()
+
+    @property
+    def bytesize(self):
+        return self.__ser.bytesize
+
+    @bytesize.setter
+    def bytesize(self, new_bytesize):
+        self.__ser.bytesize = new_bytesize
+        self.__re_open_port()
+
+    @property
+    def stopbits(self):
+        return self.__ser.stopbits
+
+    @stopbits.setter
+    def stopbits(self, new_stopbits):
+        self.__ser.stopbits = new_stopbits
+        self.__re_open_port()
 
     @staticmethod
     def get_baudrate_list()->[int]:
@@ -35,102 +80,44 @@ class Tektronix():
         logger.debug('Lista de portas seriais solicitada')
         return [port.device for port in list_ports.comports()]
 
-    def status(self)->int:
-        if not self.ser:
-            logger.warning('Porta serial não inicializada')
-            return 2
-        if not self.ser.isOpen():
-            logger.warning('Porta serial não está aberta')
-            return 1
-        return 0
-
-    def start(self) -> int:
-        ports_list = Tektronix.get_list_ports()
-        if not ports_list:
-            logger.error('Não há portas seriais disponíveis')
-            return 0
-        
-        if not self.serial_port:
-            self.serial_port = ports_list[0]
-            logger.info(f'Porta serial selecionada: {self.serial_port}')
-    
-        if self.ser is None:
-            try:
-                self.ser = Serial(
-                    port=self.serial_port,
-                    baudrate=self.baudrate,
-                    bytesize=EIGHTBITS,
-                    stopbits=STOPBITS_ONE
-                )
-                logger.info('Conexão serial estabelecida com sucesso')
-            except SerialException as e:
-                logger.error(f'Falha ao conectar na porta {self.serial_port}: {e}')
-                return 0
-
-        if self.ser.isOpen():
-            time.sleep(0.5)
-            self.ser.close()
-            logger.info('Porta serial fechada temporariamente')
-        
-        time.sleep(0.5)
-        self.ser.open()
-        logger.info('Porta serial reaberta')
-        
-        return 1
-
     def close_port(self):
-        if self.ser is None:
-            logger.error('Porta serial não inicializada')
-            return
-
-        if self.ser.isOpen():
-            self.ser.close()
+        if self.__ser.isOpen():
+            self.__ser.close()
             logger.info('Porta serial fechada')
-        return
 
     def send_command(self, command:str) -> str:
-        status = self.status()
-        if status:
-            logger.error(f'Erro {status} ao enviar comando: {command}')
-            return ''
+        if not self.__ser.is_open:
+            raise Exception("Porta não disponível")
+
         try:
-            self.ser.write(command.encode() + b'\n')
-            time.sleep(0.1)
+            self.__ser.write(command.encode() + b'\n')
             if command.strip().endswith('?'):
                 response = self.read_response()
                 logger.debug(f'Comando enviado: {command}, Resposta: {response}')
                 return response
+            return ''
         except SerialException as e:
             logger.error(f'Falha ao enviar comando {command}: {e}')
             return ''
 
     def send_commands(self, commands:[str]) -> [str]:
-        status = self.status()
-        if status:
-            logger.error(f'Erro {status} ao enviar comandos')
-            return []
-
         out_list = []
         for cmd in commands:
             out = self.send_command(cmd)
             if out:
                 out_list.append(out)
-
-        return out_list if len(out_list) else [] 
+        return out_list
 
     def read_response(self) -> str:
-        status = self.status()
-        if status:
-            logger.error(f'Erro {status} ao ler resposta')
-            return ''
-
-        response = self.ser.readline().decode()
-        self.ser.flush()
+        if not self.__ser.is_open:
+            raise Exception("Porta não disponível")
+        response = self.__ser.readline().decode()
+        self.__ser.flush()
         logger.debug(f'Resposta lida: {response}')
         return response
 
     def device_id(self):
-        res = self.send_command('ID?')        
+        res = self.send_command('ID?')
         if res:
             res = res.strip().split(',')
             device_info = {
