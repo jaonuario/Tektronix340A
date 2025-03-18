@@ -9,8 +9,8 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('tektronix.log'),  # Log para arquivo
-        logging.StreamHandler()               # Log para o console
+        logging.FileHandler('tektronix.log'),   # Log para arquivo
+        logging.StreamHandler()                 # Log para o console
     ]
 )
 logger = logging.getLogger('Tektronix')
@@ -43,6 +43,7 @@ class Tektronix():
             self.__ser.close()
         self.__ser.open()
 
+    #TODO: sincronizar as propriedades do objeto com as configurações do dispositivo antes de aplicar
     @property
     def baudrate(self):
         return self.__ser.baudrate
@@ -70,13 +71,14 @@ class Tektronix():
         self.__ser.stopbits = new_stopbits
         self.__re_open_port()
 
+    #TODO: verificar a necessidade desses métodos
     @staticmethod
-    def get_baudrate_list()->[int]:
+    def get_baudrate_list()->list[int]:
         logger.debug('Lista de baudrates solicitada')
         return [1200, 2400, 4800, 9600, 19200]
     
     @staticmethod
-    def get_list_ports()->[str]:
+    def get_list_ports()->list[str]:
         logger.debug('Lista de portas seriais solicitada')
         return [port.device for port in list_ports.comports()]
 
@@ -100,7 +102,7 @@ class Tektronix():
             logger.error(f'Falha ao enviar comando {command}: {e}')
             return ''
 
-    def send_commands(self, commands:[str]) -> [str]:
+    def send_commands(self, commands:list[str]) -> list[str]:
         out_list = []
         for cmd in commands:
             out = self.send_command(cmd)
