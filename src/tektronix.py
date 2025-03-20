@@ -30,7 +30,8 @@ class Tektronix():
                 self.__ser.open()
                 self.__ser.write(b"ID?\n")
                 response = self.__ser.readline().decode().strip()
-                if "TEKTRONIX" in response.upper():
+                print(response)
+                if "TEK/TDS 340A" in response.upper():
                     print(f"Osciloscópio encontrado em {port.device}: {response}")
                     return
                 self.__ser.close()
@@ -87,25 +88,33 @@ class Tektronix():
             self.__ser.close()
             logger.info('Porta serial fechada')
 
-    def send_command(self, command:str) -> str:
+    def command(self, command:str) -> str:
+        if not isinstance(command, str):
+            raise TypeError("The command must be a str")
+
         if not self.__ser.is_open:
-            raise Exception("Porta não disponível")
+            raise TektronixError("Porta não disponível")
 
         try:
             self.__ser.write(command.encode() + b'\n')
-            if command.strip().endswith('?'):
-                response = self.read_response()
-                logger.debug(f'Comando enviado: {command}, Resposta: {response}')
-                return response
-            return ''
+            response = self.read_response().strip()
+
+            self.__ser.write(b"*ESR?\n")
+            error = self.__ser.readline().decode().strip()
+            if error and error != "0":
+                self.__ser.write(b"ALLE?")
+                error_details = self.__ser.readline().decode().strip()
+                raise TektronixError(f"Erro ao executar '{command}': ({error}) {error_details}")
+            return response
+            
         except SerialException as e:
             logger.error(f'Falha ao enviar comando {command}: {e}')
             return ''
 
-    def send_commands(self, commands:list[str]) -> list[str]:
+    def commands(self, commands:list[str]) -> list[str]:
         out_list = []
         for cmd in commands:
-            out = self.send_command(cmd)
+            out = self.command(cmd)
             if out:
                 out_list.append(out)
         return out_list
@@ -119,19 +128,19 @@ class Tektronix():
         return response
 
     def device_id(self):
-        res = self.send_command('ID?')
+        res = self.command('ID?')
         if res:
             res = res.strip().split(',')
             device_info = {
                 "Model": res[0],
                 "Serial Number": res[1],
-                "Firmware Version": res[2]   
+                "Firmware Version": res[2]
             }
             logger.info(f'Informações do dispositivo: {device_info}')
             return device_info
         logger.warning('Falha ao obter informações do dispositivo')
         return None 
-
+    
     def ch1_freq(self):
         CH1_FREQ = [
             "MEASU:IMM:SOURCE CH1",
@@ -139,7 +148,7 @@ class Tektronix():
             "MEASU:IMM:VAL?"
         ]
         logger.info('Obtendo frequência do canal 1')
-        res = self.send_commands(CH1_FREQ)
+        res = self.commands(CH1_FREQ)
         if res:
             return res[0]
         return None
@@ -151,7 +160,7 @@ class Tektronix():
             "MEASU:IMM:VAL?"
         ]
         logger.info('Obtendo frequência do canal 2')
-        res =  self.send_commands(CH2_FREQ)
+        res =  self.commands(CH2_FREQ)
         if res:
             return res[0]
         return None    
@@ -161,18 +170,18 @@ class Tektronix():
         CH1_WAVEFORM = [
             'DAT:SOU CH1',
             "DAT:ENC ASCI",    
-            "DAT:WID 2",       
+            "DAT:WID 2",
             "DAT:STAR 1",      
             "DAT:STOP 1000",   
             "WFMPR?",          
             "CURV?"            
         ]
         logger.info('Obtendo waveform do canal 1')
-        res = self.send_commands(CH1_WAVEFORM)
+        res = self.commands(CH1_WAVEFORM)
         if res:
             return Waveform(res[0], res[1]) 
         logger.warning('Falha ao obter waveform do canal 1')
-        return None   
+        return None
 
     def ch2_waveform(self):
         CH2_WAVEFORM = [
@@ -185,7 +194,7 @@ class Tektronix():
             "CURV?"            
         ]
         logger.info('Obtendo waveform do canal 2')
-        res = self.send_commands(CH2_WAVEFORM)
+        res = self.commands(CH2_WAVEFORM)
         if res:
             return Waveform(res[0], res[1])
         logger.warning('Falha ao obter waveform do canal 2')
@@ -202,7 +211,7 @@ class Tektronix():
             "CURV?"            
         ]
         logger.info('Obtendo waveform matemática')
-        res = self.send_commands(MATH_WAVEFORM)
+        res = self.commands(MATH_WAVEFORM)
         if res:
             return Waveform(res[0], res[1])
         logger.warning('Falha ao obter waveform matemática')
@@ -219,7 +228,7 @@ class Tektronix():
             "CURV?"            
         ]
         logger.info('Obtendo waveform de referência 1')
-        res = self.send_commands(REF1_WAVEFORM)
+        res = self.commands(REF1_WAVEFORM)
         if res:
             return Waveform(res[0], res[1])
         logger.warning('Falha ao obter waveform de referência 1')
@@ -236,7 +245,7 @@ class Tektronix():
             "CURV?"            
         ]
         logger.info('Obtendo waveform de referência 2')
-        res = self.send_commands(REF2_WAVEFORM)
+        res = self.commands(REF2_WAVEFORM)
         if res:
             return Waveform(res[0], res[1])
         logger.warning('Falha ao obter waveform de referência 2')
@@ -248,22 +257,9 @@ class Tektronix():
             "ALLE?"
         ]
         logger.info('Obtendo logs de eventos')
-        return self.send_commands(EVENT_LOG)
+        return self.commands(EVENT_LOG)
 
 
-if __name__ == '__main__':
-    tek = Tektronix()
-    tek.start()
-        
-    waveform = tek.ch1_waveform()
-    #waveform = Waveform.build_waveform_by_txt('2025-02-11_15:20:28_199721.txt')
-
-    print(waveform)
-    
-    if waveform:
-        WaveformPlot(waveform).plot()        
-        #plot_xy(x, y, y_min, y_max)
-        #waveform.generate_csv()
-        #waveform.generate_waveform_txt()  
-    
+class TektronixError(Exception):
+    """ Exceção personalizada para erros do Tektronix. """
     pass
